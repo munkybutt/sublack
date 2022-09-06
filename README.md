@@ -27,17 +27,24 @@
 
 * Source: https://github.com/munkybutt/sublack
 
-
-Table Of content
------------------
+---------
 <p align="center">
-  <a href=#installation">Installation</a> •
+  <a href="#installation">Installation</a> •
   <a href="#usage">Usage</a> •
   <a href="#blackd-mode">Blackd Mode</a> •
   <a href="#pre-commit-integration">Pre-Commit Integration</a> •
-  <a href="#roadmap">Roadmap</a> •
-  <a href="#personal-info">Personal Info</a> •
+  <a href="#settings">Settings</a> •
+  <a href="#code-folding">Code Folding</a> •
+  <a href="#sublime-linter-integration">Sublime Linter Integration</a> •
+  <a href="#changelog">Changelog</a> •
+  <a href="#how-to-contribute">How to Contribute</a> •
+  <a href="#authors">Authors</a> •
+  <a href="#thanks">Thanks</a> •
+  <a href="#personal-info">Personal Info</a>
 </p>
+
+---------
+
 
 Installation
 ------------
@@ -211,7 +218,7 @@ See `black about pyproject.toml <https://github.com/ambv/black/#pyprojecttoml>`_
 Code folding
 ------------
 
-Sublack tries to keep code folding as before reformatting.
+Sublack attempt to keep code folding intact, but this functionality is unpredictable.
 
 
 Sublime Linter integration
@@ -220,25 +227,13 @@ Sublime Linter integration
 You can install `SublimeLinter-addon-black-for-flake <https://github.com/kaste/SublimeLinter-addon-black-for-flake>`_. The plugin will auto-configure flake8 and mute all warnings black can actually fix.
 
 
-Issues
-------
-
-If there is something wrong with this plugin, `add an issue <https://github.com/jgirardet/sublack/issues>`_ on GitHub and I'll try to address it.
-
-
-Thanks
-------
-
-This plugin is very inspired by the very good `PyYapf <https://github.com/jason-kane/PyYapf>`_ Plugin. Thanks to Jason Kane.
-
-
 Changelog
 ---------
 
 see `install.txt <messages/install.txt>`_
 
 
-Contributing
+How to Contribute
 ------------
 
 * Remove sublack via Package Control.
@@ -268,11 +263,13 @@ Contributions by:
 * `Cyrus Yip <https://github.com/realcyguy>`_
 * `Georgios Samaras <https://github.com/gsamaras>`_
 
+Thanks
+------
 
-Todo
-----
+This plugin is very inspired by the very good `PyYapf <https://github.com/jason-kane/PyYapf>`_ Plugin. Thanks to Jason Kane.
 
-- cors
-- refactor popen
 
-.. _Black : https://github.com/ambv/black
+## Personal Info
+> Webbie [techanimdad.com](https://techanimdad.com) &nbsp;&middot;&nbsp;
+> GitHub [@munkybutt](https://github.com/munkybutt)
+
