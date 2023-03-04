@@ -168,7 +168,7 @@ class Black:
 
     def get_black_command(self, extra: list[str] = []) -> list[str]:
         # prepare popen arguments
-        black_command = utils.get_black_executable_command()
+        black_command = utils.get_black_executable_command(black_command=self.config["black_command"])
         if not black_command:
             # always show error in popup
             msg = "Black command not configured. Check your settings!"
@@ -176,10 +176,13 @@ class Black:
             raise Exception(msg)
 
         black_command = os.path.expanduser(black_command)
-        black_command = sublime.expand_variables(black_command, self.variables)
+        black_command = str(sublime.expand_variables(black_command, self.variables))
 
-        # set black in input/ouput mode with "-"
-        command: list[str] = [black_command, "-"]
+        python_exe_path = utils.get_vendor_python_exe_path()
+        python_exe_path = os.path.expanduser(str(python_exe_path))
+        python_exe_path = str(sublime.expand_variables(python_exe_path, self.variables))
+
+        command: list[str] = [python_exe_path, black_command]
 
         # extra args
         if extra:
@@ -230,6 +233,8 @@ class Black:
 
     def run_black(self, command: list[str], env: dict[str, Any], cwd, content):
         try:
+            command.extend(("-c", content))
+            self.log.debug(f"run_black.command: {command}")
             process = subprocess.Popen(
                 command,
                 env=env,
@@ -239,18 +244,21 @@ class Black:
                 stderr=subprocess.PIPE,
                 startupinfo=utils.get_startup_info(),
             )
-            out, err = process.communicate(input=content)
+            out, err = process.communicate()
 
-        except UnboundLocalError as err:  # unboud pour process si popen echoue
+        except UnboundLocalError as err:
             msg = "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
             sublime.error_message("OSError: %s\n\n%s" % (err, msg))
             raise OSError(
                 "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
             )
 
-        except OSError as err:  # unboud pour process si popen echoue
+        except OSError as err:
+            import traceback
+
+            exception = traceback.format_exc()
             msg = "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
-            sublime.error_message("OSError: %s\n\n%s" % (err, msg))
+            sublime.error_message("OSError: %s\n\n%s" % (exception, msg))
             raise OSError(
                 "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
             )
@@ -284,6 +292,7 @@ class Black:
     def is_cached(self, content, command):
         h_content = hash(content)
         cache = self.formatted_cache.open().read().splitlines()
+        self.log.debug(f"cache: {cache}")
         for line in cache:
             content_f, cmd_f = line.split("|||")
             if int(content_f) == h_content:

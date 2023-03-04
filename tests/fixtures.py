@@ -5,11 +5,14 @@ import pathlib
 from unittest import TestCase
 from unittesting import DeferrableTestCase
 
-from types import ModuleType
 
-sublack: ModuleType = sys.modules["sublack.sublack"]
-sublack_server: ModuleType = sys.modules["sublack.sublack.server"]
-sublack_utils: ModuleType = sys.modules["sublack.sublack.utils"]
+sublack_module = sys.modules["sublack.sublack"]
+sublack_server_module = sys.modules["sublack.sublack.server"]
+sublack_utils_module = sys.modules["sublack.sublack.utils"]
+
+
+# def get_sublack():
+#     return sys.modules["sublack.sublack"]
 
 
 blacked = """def get_encoding_from_file(view):
@@ -85,7 +88,9 @@ folding2_expected = """class A:
             pass
 """
 
-view = lambda: sublime.active_window().new_file()
+
+def view():
+    return sublime.active_window().new_file()
 
 
 # precommit

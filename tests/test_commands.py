@@ -3,29 +3,31 @@ from unittest.mock import patch
 
 import time
 import sublime
-from fixtures import (
-    sublack,
-    sublack_server,
-    sublack_utils,
-    blacked,
-    unblacked,
-    diff,
-    folding1,
-    folding1_expected,
-    folding2,
-    folding2_expected,
-    TestCaseBlack
-)
 
-_typing = False
-if _typing:
-    import sublack
-    import sublack.server as sublack_server
-    import sublack.utils as sublack_utils
-del _typing
+# from . import fixtures
+# from fixtures import (
+from fixtures import sublack_module
+from fixtures import sublack_server_module
+from fixtures import sublack_utils_module
+from fixtures import blacked
+from fixtures import unblacked
+from fixtures import diff
+from fixtures import folding1
+from fixtures import folding1_expected
+from fixtures import folding2
+from fixtures import folding2_expected
+from fixtures import TestCaseBlack
+# )
+
+# _typing = False
+# if _typing:
+#     import sublack_module
+#     import sublack_module.server as sublack_server_module
+#     import sublack_module.utils as sublack_utils_module
+# del _typing
 
 
-import requests  # type: ignore
+# import requests  # type: ignore
 
 from pathlib import Path
 
@@ -47,8 +49,8 @@ TEST_BLACK_SETTINGS = {
 }
 
 
-@patch.object(sublack.utils, "is_python", return_value=True)
-@patch.object(sublack.blacker, "get_settings", return_value=TEST_BLACK_SETTINGS)
+@patch.object(sublack_module.utils, "is_python", return_value=True)
+@patch.object(sublack_module.utils, "get_settings", return_value=TEST_BLACK_SETTINGS)
 class TestBlack(TestCaseBlack):
     def test_black_file(self, s, c):
         self.setText(unblacked)
@@ -57,19 +59,19 @@ class TestBlack(TestCaseBlack):
 
     def test_black_file_nothing_todo(self, s, c):
         # clear cache
-        sublack.utils.clear_cache()
+        sublack_module.utils.clear_cache()
 
         self.setText(blacked)
         self.view.run_command("black_file")
         self.assertEqual(blacked, self.all())
         self.assertEqual(
-            self.view.get_status(sublack.consts.STATUS_KEY),
-            sublack.consts.ALREADY_FORMATTED_MESSAGE,
+            self.view.get_status(sublack_module.consts.STATUS_KEY),
+            sublack_module.consts.ALREADY_FORMATTED_MESSAGE,
         )
 
     def test_black_file_nothing_todo_cached(self, s, c):
         # clear cache
-        sublack.utils.clear_cache()
+        sublack_module.utils.clear_cache()
 
         self.setText(blacked)
         self.view.run_command("black_file")
@@ -77,8 +79,8 @@ class TestBlack(TestCaseBlack):
         self.view.run_command("black_file")
         self.assertEqual(blacked, self.all())
         self.assertEqual(
-            self.view.get_status(sublack.consts.STATUS_KEY),
-            sublack.consts.ALREADY_FORMATTED_MESSAGE_CACHE,
+            self.view.get_status(sublack_module.consts.STATUS_KEY),
+            sublack_module.consts.ALREADY_FORMATTED_MESSAGE_CACHE,
         )
 
     def test_black_file_dirty_stay_dirty(self, s, c):
@@ -140,8 +142,8 @@ class TestBlack(TestCaseBlack):
 
 class TestBlackdServer(TestCase):
     def setUp(self):
-        self.port = str(sublack.get_open_port())
-        SETTINGS = {"sublack.black_blackd_port": self.port}
+        self.port = str(sublack_module.get_open_port())
+        SETTINGS = {"sublack_module.black_blackd_port": self.port}
 
         self.view = sublime.active_window().new_file()
         self.settings = self.view.settings()
@@ -167,7 +169,7 @@ class TestBlackdServer(TestCase):
         # I am certain there is a much better method of doing this, so will have to come
         # back to it when I am less sleep deprived...
         if not post:
-            port = port or sublack_utils.get_open_port()
+            port = port or sublack_utils_module.get_open_port()
             def _start_blackd():
                 self.view.run_command("blackd_start", {"port": port})
                 self.test_start_and_stop_blackd(post=True, port=port)
@@ -176,21 +178,21 @@ class TestBlackdServer(TestCase):
             return
 
         start_time = time.time()
-        blackd_starting = sublack_server.is_blackd_starting()
+        blackd_starting = sublack_server_module.is_blackd_starting()
         while blackd_starting:
             time.sleep(0.5)
-            blackd_starting = sublack_server.is_blackd_starting()
+            blackd_starting = sublack_server_module.is_blackd_starting()
             if time.time() - start_time > 20:
                 raise AssertionError("Timed out waiting for blackd to start")
 
         self.assertTrue(
-            sublack_utils.is_blackd_running_on_port(port),
+            sublack_utils_module.is_blackd_running_on_port(port),
             "ensure blackd is running for the test",
         )
 
         # self.assertEqual(
-        #     self.view.get_status(sublack.STATUS_KEY),
-        #     sublack.BLACKD_STARTED.format(self.port),
+        #     self.view.get_status(sublack_module.STATUS_KEY),
+        #     sublack_module.BLACKD_STARTED.format(self.port),
         #     "should tell it starts",
         # )
 
@@ -198,8 +200,8 @@ class TestBlackdServer(TestCase):
         # with patch("sublime.message_dialog"):
         #     self.view.run_command("blackd_start")
         # self.assertEqual(
-        #     self.view.get_status(sublack.STATUS_KEY),
-        #     sublack.BLACKD_ALREADY_RUNNING.format(self.port),
+        #     self.view.get_status(sublack_module.STATUS_KEY),
+        #     sublack_module.BLACKD_ALREADY_RUNNING.format(self.port),
         #     "sould tell it fails",
         # )
 
@@ -210,11 +212,11 @@ class TestBlackdServer(TestCase):
         # set up
         # stop any existing blackd server first
         # else we lose track of the pid:
-        test_port = sublack_utils.get_open_port()
+        test_port = sublack_utils_module.get_open_port()
         self.view.run_command("blackd_start", {"port": test_port})
         time.sleep(2)
         self.assertTrue(
-            sublack_utils.is_blackd_running_on_port(test_port),
+            sublack_utils_module.is_blackd_running_on_port(test_port),
             "ensure blackd is running for the test",
         )
 
@@ -227,16 +229,16 @@ class TestBlackdServer(TestCase):
         #     ),
         # )
         # self.assertEqual(
-        #     self.view.get_status(sublack.STATUS_KEY),
-        #     sublack.BLACKD_STOPPED,
+        #     self.view.get_status(sublack_module.STATUS_KEY),
+        #     sublack_module.BLACKD_STOPPED,
         #     "should tell it stops",
         # )
 
         # # already stopped
         # sublime.run_command("blackd_stop")
         # self.assertEqual(
-        #     self.view.get_status(sublack.STATUS_KEY),
-        #     sublack.BLACKD_STOP_FAILED,
+        #     self.view.get_status(sublack_module.STATUS_KEY),
+        #     sublack_module.BLACKD_STOP_FAILED,
         #     "status tell stop failed",
         # )
 
@@ -261,8 +263,8 @@ class TestFormatAll(TestCaseBlack):
         with patch("sublime.ok_cancel_dialog", return_value=True):
             self.window.run_command("black_format_all")
         self.assertEqual(
-            self.window.active_view().get_status(sublack.STATUS_KEY),
-            sublack.REFORMATTED_MESSAGE,
+            self.window.active_view().get_status(sublack_module.STATUS_KEY),
+            sublack_module.REFORMATTED_MESSAGE,
             "reformat should be ok",
         )
 
@@ -275,8 +277,8 @@ class TestFormatAll(TestCaseBlack):
         with patch("sublime.ok_cancel_dialog", return_value=True):
             self.window.run_command("black_format_all")
         self.assertEqual(
-            self.window.active_view().get_status(sublack.STATUS_KEY),
-            sublack.REFORMAT_ERRORS,
+            self.window.active_view().get_status(sublack_module.STATUS_KEY),
+            sublack_module.REFORMAT_ERRORS,
             "reformat should be error",
         )
 
@@ -301,9 +303,9 @@ PRECOMMIT_BLACK_SETTINGS = {
 precommit_config_path = Path(Path(__file__).parent, ".pre-commit-config.yaml")
 
 
-@patch.object(sublack.blacker, "use_pre_commit", return_value=precommit_config_path)
-@patch.object(sublack.utils, "is_python", return_value=True)
-@patch.object(sublack.blacker, "get_settings", return_value=PRECOMMIT_BLACK_SETTINGS)
+@patch.object(sublack_module.utils, "use_pre_commit", return_value=precommit_config_path)
+@patch.object(sublack_module.utils, "is_python", return_value=True)
+@patch.object(sublack_module.utils, "get_settings", return_value=PRECOMMIT_BLACK_SETTINGS)
 class TestPrecommit(TestCaseBlack):
     def test_black_file(self, s, c, p):
         project = {"folders": [{"path": str(Path(Path(__file__).parents[1]))}]}
@@ -314,8 +316,8 @@ class TestPrecommit(TestCaseBlack):
         self.assertEqual(blacked, self.all())
 
 
-# @patch.object(sublack.commands, "is_python", return_value=True)
-# @patch.object(sublack.blacker, "get_settings", return_value=TEST_BLACK_SETTINGS)
+# @patch.object(sublack_module.commands, "is_python", return_value=True)
+# @patch.object(sublack_module.blacker, "get_settings", return_value=TEST_BLACK_SETTINGS)
 # class TestCommandsAsync(TestCaseBlackAsync):
 #     def test_black_file_keeps_view_port_position(self, s, c):
 

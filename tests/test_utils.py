@@ -1,14 +1,13 @@
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from fixtures import sublack, pre_commit_config
+from fixtures import sublack_module as sublack
+from fixtures import pre_commit_config
 import sublime
 import re
 import tempfile
 import os
 import pathlib
-
-from pathlib import Path
 
 
 class View(str):
@@ -109,7 +108,7 @@ class TestUtils(TestCase):
 
         # check len consts.CONFIG_OPTIONS == sublime-settings file
         path = sublime.active_window().extract_variables().get("packages")
-        path = Path(path, "sublack", "sublack.sublime-settings")
+        path = pathlib.Path(path, "sublack", "sublack.sublime-settings")
         c = open(str(path)).read()
         settings = re.findall(r"black_[a-z_0-9]+", c)
         self.assertEqual(set(settings), set(sublack.consts.CONFIG_OPTIONS))
@@ -135,19 +134,19 @@ class TestUtils(TestCase):
 
     def test_find_root_file_no_filename(self):
         with tempfile.TemporaryDirectory() as T:
-            root = Path(T)
+            root = pathlib.Path(T)
             view = View(Window())  # no file path
             self.assertIsNone(sublack.utils.find_root_file(view, "some.file"))
 
     def test_find_root_file_no_folder(self):
         with tempfile.TemporaryDirectory() as T:
-            root = Path(T)
+            root = pathlib.Path(T)
             view = View(Window({"file_path": "/bla/bla"}, []))  # no folder
             self.assertIsNone(sublack.utils.find_root_file(view, "some.file"))
 
     def test_find_root_file_no_folder_in_filepath(self):
         with tempfile.TemporaryDirectory() as T:
-            root = Path(T)
+            root = pathlib.Path(T)
             view = View(
                 Window({"file_path": "/bla/bla"}, ["/ble"])
             )  # root folder not in filepath
@@ -155,28 +154,28 @@ class TestUtils(TestCase):
 
     def test_find_root_file_no_root_file(self):
         with tempfile.TemporaryDirectory() as T:
-            root = Path(T)
-            view = View(Window({"file_path": str(Path(T, "working.py"))}, [T]))
+            root = pathlib.Path(T)
+            view = View(Window({"file_path": str(pathlib.Path(T, "working.py"))}, [T]))
             self.assertIsNone(sublack.utils.find_root_file(view, "some.file"))
 
     def test_find_root_file_all_in_root_folder(self):
         with tempfile.TemporaryDirectory() as T:
-            root = Path(T)
+            root = pathlib.Path(T)
             pp = root / "some.file"
             pp.touch()
 
-            view = View(Window({"file_path": str(Path(T, "working.py"))}, [T]))
+            view = View(Window({"file_path": str(pathlib.Path(T, "working.py"))}, [T]))
             self.assertEqual(sublack.utils.find_root_file(view, "some.file"), pp)
 
     def test_find_root_file_filepath_in_subdirs(self):
         with tempfile.TemporaryDirectory() as T:
-            root = Path(T)
+            root = pathlib.Path(T)
             pp = root / "some.file"
             pp.touch()
 
             view = View(
                 Window(
-                    {"file_path": str(Path(T, "some", "sub", "dirs", "working.py"))},
+                    {"file_path": str(pathlib.Path(T, "some", "sub", "dirs", "working.py"))},
                     [T],
                 )
             )
@@ -184,7 +183,7 @@ class TestUtils(TestCase):
 
     def test_find_root_file_filepath_in_subdirs_with_root_file(self):
         with tempfile.TemporaryDirectory() as T:
-            common = Path(T, "some", "sub", "dirs")
+            common = pathlib.Path(T, "some", "sub", "dirs")
             common.mkdir(parents=True)
             pp = common / "some.file"
             pp.touch()
@@ -195,7 +194,7 @@ class TestUtils(TestCase):
     def test_find_root_file_find_closest(self):
         with tempfile.TemporaryDirectory() as T:
 
-            root = Path(T)
+            root = pathlib.Path(T)
             pp = root / "some.file"
             pp.touch()
 
@@ -206,7 +205,7 @@ class TestUtils(TestCase):
 
             view = View(
                 Window(
-                    {"file_path": str(Path(T, "some", "sub", "dirs", "working.py"))},
+                    {"file_path": str(pathlib.Path(T, "some", "sub", "dirs", "working.py"))},
                     [T],
                 )
             )
@@ -219,7 +218,7 @@ class TestUtils(TestCase):
             # no pyproject_found
             self.assertEqual({}, sublack.utils.read_pyproject_toml(None))
             # nothing in it
-            pp = Path(T, "pyproject.toml")
+            pp = pathlib.Path(T, "pyproject.toml")
             pp.touch()
             self.assertEqual({}, sublack.utils.read_pyproject_toml(pp))
             # successful way
@@ -244,7 +243,7 @@ class TestUtils(TestCase):
     def test_use_precommit(self):
         print("test use precommit")
         with tempfile.TemporaryDirectory() as T:
-            path = Path(T, ".pre-commit-config.yaml")
+            path = pathlib.Path(T, ".pre-commit-config.yaml")
 
             # no file
             self.assertFalse(sublack.utils.use_pre_commit(None))
@@ -266,7 +265,7 @@ class TestUtils(TestCase):
 
     def test_class_path(self):
         with tempfile.TemporaryDirectory() as T:
-            f = Path(T, "rien")
+            f = pathlib.Path(T, "rien")
             written = f.write_text("hello")
 
             # test write

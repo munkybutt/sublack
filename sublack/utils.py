@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sublime
 import functools
 import locale
 import logging
@@ -9,11 +8,12 @@ import pathlib
 import re
 import signal
 import socket
+import sublime
 import subprocess
 import time
 
 from . import consts
-from . import vendor
+from . import vendor as _vendor
 
 _typing = False
 if _typing:
@@ -40,9 +40,7 @@ def get_log(settings: dict[str, Any] | None = None) -> logging.Logger:
 
         view = sublime.active_window().active_view()
         assert view
-        settings = (
-            get_settings(view) if settings is None else settings
-        )
+        settings = get_settings(view) if settings is None else settings
         debug_formatter = logging.Formatter(
             "[{pn}:%(filename)s.%(funcName)s-%(lineno)d](%(levelname)s) %(message)s".format(
                 pn=consts.PACKAGE_NAME
@@ -254,16 +252,23 @@ def get_startup_info() -> subprocess.STARTUPINFO | None:
 
 
 @functools.lru_cache()
-def get_black_executable_command(vendor: bool = False) -> str:
+def get_black_executable_command(black_command: str | None = None, vendor: bool = False) -> str:
     log = get_log()
     view = sublime.active_window().active_view()
-    settings = get_settings(view)
-    user_black_command: str = settings["black_command"]
-    black_command = get_vendor_black_path() if vendor else user_black_command
-    black_command = black_command or get_vendor_black_path()
+    if not black_command:
+        settings = get_settings(view)
+        black_command = settings["black_command"]
+
+    log.debug(f"settings_black_command: {black_command}")
+    if vendor or not black_command:
+        black_command = get_vendor_black_path()
+
+    log.debug(f"black_command: {black_command}")
+    python_exe_path = get_vendor_python_exe_path()
+    _black_command = [python_exe_path, black_command]
     try:
         subprocess.run(
-            black_command,
+            _black_command,
             capture_output=True,
             universal_newlines=True,
             input="def test(): return",
@@ -294,7 +299,10 @@ def get_black_executable_command(vendor: bool = False) -> str:
 
 @functools.lru_cache()
 def get_vendor_black_path() -> str:
-    vendor_local_path = vendor.get_vendor_local_path()
+    if not is_windows():
+        raise WindowsError("Can only use vendor path on Windows!")
+
+    vendor_local_path = _vendor.get_vendor_local_path()
     return str(vendor_local_path / "python/windows/Lib/site-packages/black")
 
 
@@ -305,7 +313,7 @@ def get_vendor_blackd_path() -> str:
 
 @functools.lru_cache()
 def get_vendor_python_exe_path() -> pathlib.Path:
-    vendor_local_path = vendor.get_vendor_local_path()
+    vendor_local_path = _vendor.get_vendor_local_path()
     return vendor_local_path / "python/windows/python.exe"
 
 
