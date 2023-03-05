@@ -91,7 +91,6 @@ class TestBlack(TestCaseBlack):
         self.assertEqual(blacked, self.all())
 
     def test_black_diff(self, s, c):
-
         self.setText(unblacked)
         self.view.set_name("base")
         backup = self.view
@@ -100,8 +99,9 @@ class TestBlack(TestCaseBlack):
         window = sublime.active_window()
         view = window.active_view()
         assert view, "No active view found!"
+        print(f"VIEW NAME: {view.name()}")
         region = sublime.Region(0, view.size())
-        region = sublime.Region(view.lines(region)[2].begin(), view.size())
+        region = sublime.Region(view.lines(region)[0].begin(), view.size())
         region_content = view.substr(region).strip()
         r_lines = region_content.splitlines()
         lines = diff.splitlines()

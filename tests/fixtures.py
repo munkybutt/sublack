@@ -41,14 +41,14 @@ def get_encoding_from_file( view):
         return encoding
     return None"""
 
-diff = r"""@@ -1,12 +1,11 @@
-+def get_encoding_from_file(view):
- 
+diff = r"""
+@@ -1,11 +1,11 @@
 -def get_encoding_from_file( view):
-+    region = view.line(sublime.Region(0))
- 
++def get_encoding_from_file(view):
+
 -    region = view.line( sublime.Region(0))
--
++    region = view.line(sublime.Region(0))
+
 -    encoding = get_encoding_from_region( region, view)
 +    encoding = get_encoding_from_region(region, view)
      if encoding:

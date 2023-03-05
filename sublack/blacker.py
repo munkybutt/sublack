@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+from sys import stdin
 import sublime
 import subprocess
 
@@ -30,8 +31,17 @@ class Blackd:
     Wrapper between black command line and blackd
     """
 
-    def __init__(self, command: list[str], content: bytes, encoding: str, config: dict[str, Any]):
+    def __init__(
+        self,
+        command: list[str],
+        content: bytes,
+        encoding: str,
+        config: dict[str, Any],
+        view: sublime.View | None = None,
+    ):
         super().__init__()
+        self._view = view
+
         self.headers = self.format_headers(command)
         self.content = content
         self.encoding = encoding
@@ -41,43 +51,48 @@ class Blackd:
     def log(self):
         return utils.get_log()
 
-    @staticmethod
-    def format_headers(command: list[str]):
-        """Get command line args and turn it to properly formatted headers"""
-        headers = {}
+    @property
+    def view(self):
+        view = self._view or sublime.active_window().active_view()
+        assert view, "view not defined!"
+        return view
 
+    def format_headers(self, command: list[str]) -> dict[str, Any]:
+        """Get command line args and turn it to properly formatted headers"""
+        headers: dict[str, Any] = {}
+        command_set = set(command)
         # all but line length an dtarget version
         for item in command:
-            if item in consts.HEADERS_TABLE:
-                headers.update(consts.HEADERS_TABLE[item])
-        # line length
-        if "-l" in command:
-            headers["X-Line-Length"] = command[command.index("-l") + 1]
-
-        # target version
-        use_dif = False
-        targets = set()
-        for index, item in enumerate(command):
-            if item == "--diff":
-                use_dif = True
-
-            if item != "--target-version":
+            if item not in consts.HEADERS_TABLE:
                 continue
 
-            version = command[index + 1]
-            variant = version[:-1] + "." + version[-1]
-            targets.add(variant)
+            headers.update(consts.HEADERS_TABLE[item])
 
-        if "--py36" in command:
-            targets.add("py3.6")
+        if "-l" in command_set:
+            headers["X-Line-Length"] = command[command.index("-l") + 1]
 
-        if targets:
-            headers["X-Python-Variant"] = ",".join(targets)
+        filename = self.view.file_name()
+        if filename and filename.endswith(".pyi"):
+            headers["X-Python-Variant"] = "pyi"
 
+        else:
+            targets = set()
+            for index, item in enumerate(command):
+                if item != "--target-version":
+                    continue
+
+                version = command[index + 1]
+                variant = f"{version[:-1]}.{version[-1]}"
+                targets.add(variant)
+
+            if targets:
+                headers["X-Python-Variant"] = ",".join(targets)
+
+        use_dif = "--diff" in command_set
         if use_dif:
             headers["X-Diff"] = "true"
 
-        utils.get_log().debug("headers : %s", headers)
+        self.log.debug(f"headers: {headers}")
         return headers
 
     def process_response(self, response):
@@ -109,9 +124,7 @@ class Blackd:
             self.log.debug("Black server has not finished initializing!")
             return None, None, None
 
-        self.headers.update(
-            {"Content-Type": "application/octet-stream; charset={}".format(self.encoding)}
-        )
+        self.headers.update({"Content-Type": f"application/octet-stream; charset={self.encoding}"})
         url = "http://{h}:{p}/".format(
             h=self.config["black_blackd_host"], p=self.config["black_blackd_port"]
         )
@@ -146,14 +159,14 @@ class Black:
         window = view.window() or active_window
 
         self.view = view
-        self.config = utils.get_settings(view)
+        self.settings = utils.get_settings(view)
         self.all = sublime.Region(0, self.view.size())
         self.variables = window.extract_variables()
         self.formatted_cache = utils.cache_path() / "formatted"
         self.pre_commit_config = False
 
-        self.log.debug("Config:\n{}".format(utils.format_log_data(self.config)))
-        if not self.config["black_use_precommit"]:
+        self.log.debug("Config:\n{}".format(utils.format_log_data(self.settings)))
+        if not self.settings.get("black_use_precommit"):
             return
 
         root_file = utils.find_root_file(self.view, ".pre-commit-config.yaml")
@@ -166,62 +179,52 @@ class Black:
     def log(self):
         return utils.get_log()
 
-    def get_black_command(self, extra: list[str] = []) -> list[str]:
+    def get_black_command(self, extra: list[str] | None = None) -> list[str]:
         # prepare popen arguments
-        black_command = utils.get_black_executable_command(black_command=self.config["black_command"])
+        black_command = utils.get_full_black_command(view=self.view, extra=extra)
+        # black_command = utils.get_black_executable_command(black_command=self.config["black_command"])
         if not black_command:
             # always show error in popup
             msg = "Black command not configured. Check your settings!"
             sublime.error_message(msg)
             raise Exception(msg)
 
-        black_command = os.path.expanduser(black_command)
-        black_command = str(sublime.expand_variables(black_command, self.variables))
-
-        python_exe_path = utils.get_vendor_python_exe_path()
-        python_exe_path = os.path.expanduser(str(python_exe_path))
-        python_exe_path = str(sublime.expand_variables(python_exe_path, self.variables))
-
-        command: list[str] = [python_exe_path, black_command]
-
         # extra args
         if extra:
-            command.extend(extra)
-
-        # add black specific config to cmmandline
+            black_command.extend(extra)
 
         # Line length option
-        black_line_length = self.config.get("black_line_length")
-        if self.config.get("black_line_length"):
-            command.extend(("-l", str(black_line_length)))
+        black_line_length = self.settings.get("black_line_length")
+        if self.settings.get("black_line_length"):
+            black_command.extend(("-l", str(black_line_length)))
 
         # fast
-        if self.config.get("black_fast", None):
-            command.append("--fast")
+        if self.settings.get("black_fast", None):
+            black_command.append("--fast")
 
         # black_skip_string_normalization
-        if self.config.get("black_skip_string_normalization"):
-            command.append("--skip-string-normalization")
+        if self.settings.get("black_skip_string_normalization"):
+            black_command.append("--skip-string-normalization")
 
         # handle pyi
         filename = self.view.file_name()
         if filename and filename.endswith(".pyi"):
-            command.append("--pyi")
+            black_command.append("--pyi")
 
         # black_py36
-        if self.config.get("black_py36"):
-            command.append("--py36")
+        if self.settings.get("black_py36"):
+            black_command.append("--py36")
 
         # black target-version
-        if self.config.get("black_target_version"):
-            for v in self.config["black_target_version"]:
-                command.extend(("--target-version", v))
+        if self.settings.get("black_target_version"):
+            for v in self.settings["black_target_version"]:
+                black_command.extend(("--target-version", v))
 
-        self.log.debug("command line: %s", command)
-        return command
+        self.log.debug(f"black_command line: {black_command}")
+        return black_command
 
     def get_content(self):
-        encoding = utils.get_encoding(settings=self.config)
+        encoding = utils.get_encoding(settings=self.settings)
 
         # select the whole file en encode it
         # encoding in popen starts with python 3.6
@@ -231,10 +234,8 @@ class Black:
         self.log.debug("encoding: %s", encoding)
         return content, encoding
 
-    def run_black(self, command: list[str], env: dict[str, Any], cwd, content):
+    def run_black(self, command: list[str], env: dict[str, Any], cwd: str | None, content: bytes):
         try:
-            command.extend(("-c", content))
-            self.log.debug(f"run_black.command: {command}")
             process = subprocess.Popen(
                 command,
                 env=env,
@@ -244,7 +245,7 @@ class Black:
                 stderr=subprocess.PIPE,
                 startupinfo=utils.get_startup_info(),
             )
-            out, err = process.communicate()
+            out, err = process.communicate(input=content)
 
         except UnboundLocalError as err:
             msg = "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
@@ -267,12 +268,13 @@ class Black:
         return process.returncode, out, err
 
     def do_diff(self, edit: sublime.Edit, out: bytes, encoding: str):
-        window = self.view.window()
-        f = window.new_file()
-        f.set_scratch(True)
-        f.set_name("sublack diff %s" % self.view.name())
-        f.set_syntax_file("Packages/Diff/Diff.sublime-syntax")
-        f.insert(edit, 0, out.decode(encoding))
+        window = sublime.active_window()
+        view = window.new_file()
+        window.focus_view(view)
+        view.set_scratch(True)
+        view.set_name("sublack diff %s" % self.view.name())
+        view.set_syntax_file("Packages/Diff/Diff.sublime-syntax")
+        view.insert(edit, 0, out.decode(encoding))
 
     def get_good_working_dir(self):
         filename = self.view.file_name()
@@ -281,11 +283,11 @@ class Black:
 
         window = self.view.window()
         if not window:
-            return None
+            return
 
         folders = window.folders()
         if not folders:
-            return None
+            return
 
         return folders[0]
 
@@ -397,18 +399,15 @@ class Black:
         # get command_line  + args
         content, encoding = self.get_content()
         cwd = self.get_good_working_dir()
-        self.log.debug("Working dir: {}".format(cwd))
+        self.log.debug(f"Working dir: {cwd}")
         env = utils.get_env()
-        # self.log.debug("env: {}".format(env))
 
         if self.pre_commit_config:
             self.log.debug("Using pre-commit with {}".format(self.pre_commit_config))
             self.format_via_precommit(edit, content.decode(encoding), cwd, env)
             return
-        else:
-            command = self.get_black_command(extra)
 
-        self.log.debug("command: {}".format(command))
+        command = utils.get_full_black_command(view=self.view, extra=extra)
 
         # check the cache
         # cache may not be used with pre-commit
@@ -417,13 +416,13 @@ class Black:
             return
 
         # call black or balckd:
-        if self.config["black_use_blackd"]:  # no diff with server
+        if self.settings["black_use_blackd"]:  # no diff with server
             if not utils.has_blackd_started():
                 self.log.debug("Black server has not finished initializing!")
                 return
 
             self.log.debug("using blackd")
-            returncode, out, err = Blackd(command, content, encoding, self.config)()
+            returncode, out, err = Blackd(command, content, encoding, self.settings)()
 
         else:
             self.log.debug("using black")

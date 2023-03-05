@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import functools
 import locale
 import logging
@@ -156,7 +157,9 @@ def get_on_save_fast(view: sublime.View):
     return sublime.load_settings(consts.SETTINGS_FILE_NAME).get("black_on_save")
 
 
-def get_settings(view: sublime.View) -> dict[str, Any]:
+def get_settings(view: sublime.View | None = None) -> dict[str, Any]:
+    view = view or sublime.active_window().active_view()
+    assert view, "No view found!"
     flat_settings = view.settings()
     nested_settings = flat_settings.get(consts.PACKAGE_NAME, {})
     global_settings = sublime.load_settings(consts.SETTINGS_FILE_NAME)
@@ -320,6 +323,99 @@ def get_vendor_python_exe_path() -> pathlib.Path:
 @functools.lru_cache()
 def cache_path() -> pathlib.Path:
     return pathlib.Path(sublime.cache_path(), consts.PACKAGE_NAME)
+
+
+def _resolve_command(command: str) -> str:
+    command = os.path.expanduser(command)
+    return str(sublime.expand_variables(command, sublime.active_window().extract_variables()))
+
+
+@functools.lru_cache()
+def get_base_black_command(
+    view: sublime.View,
+    black_command: str = "",
+    use_blackd: bool = False,
+    use_vendor: bool = False
+) -> list[str]:
+    log = get_log()
+    full_black_command = None
+    if black_command or black_command and not use_vendor:
+        black_command = _resolve_command(black_command)
+        full_black_command = [f"{black_command}d" if use_blackd else black_command, "-"]
+
+    else:
+        black_command = get_vendor_blackd_path() if use_blackd else get_vendor_black_path()
+        full_black_command = [str(get_vendor_python_exe_path()), black_command, "-"]
+
+    try:
+        subprocess.run(
+            full_black_command,
+            capture_output=True,
+            universal_newlines=True,
+            input="def test(): return",
+            startupinfo=get_startup_info(),
+        )
+        return full_black_command
+
+    except FileNotFoundError as error:
+        if use_vendor:
+            message_text = f"Vendored black path was unsucessful: {full_black_command}!"
+            log.critical(message_text)
+            sublime.error_message(message_text)
+            raise
+
+        log.debug(
+            f"Black command could not be found: {black_command}.\nAttempting to use vendored path.\n{error}"
+        )
+        return get_base_black_command(view=view, use_vendor=True)
+
+    except subprocess.CalledProcessError as error:
+        if use_vendor:
+            message_text = "Vendored black path failed to run!"
+            log.critical(f"{message_text}:\n - {black_command}!")
+            sublime.error_message(message_text)
+            raise
+
+        log.debug(
+            f"Black command could not be found: {black_command}.\nAttempting to use vendored path.\n{error}"
+        )
+        return get_base_black_command(view=view, use_vendor=True)
+
+
+def get_full_black_command(view: sublime.View, extra: list[str] | None = None):
+    log = get_log()
+    settings = get_settings(view=view)
+    base_black_command = copy.copy(
+        get_base_black_command(
+            view,
+            black_command=settings.get("black_command"),
+            use_blackd=settings.get("black_use_blackd", False)
+        )
+    )
+
+    if extra:
+        base_black_command.extend(extra)
+
+    black_line_length = settings.get("black_line_length")
+    if black_line_length:
+        base_black_command.extend(("-l", str(black_line_length)))
+
+    if settings.get("black_fast"):
+        base_black_command.append("--fast")
+
+    if settings.get("black_skip_string_normalization"):
+        base_black_command.append("--skip-string-normalization")
+
+    file_name = view.file_name()
+    if file_name and file_name.lower().endswith(".pyi"):
+        base_black_command.append("--pyi")
+
+    if settings.get("black_target_version"):
+        for version in settings["black_target_version"]:
+            base_black_command.extend(("--target-version", version))
+
+    log.debug(f"Full Black command: {base_black_command}")
+    return base_black_command
 
 
 def shell() -> bool:
