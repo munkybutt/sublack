@@ -41,14 +41,14 @@ def get_encoding_from_file( view):
         return encoding
     return None"""
 
-diff = r"""
-@@ -1,11 +1,11 @@
--def get_encoding_from_file( view):
+diff = r"""@@ -1,12 +1,11 @@
 +def get_encoding_from_file(view):
-
--    region = view.line( sublime.Region(0))
+ 
+-def get_encoding_from_file( view):
 +    region = view.line(sublime.Region(0))
-
+ 
+-    region = view.line( sublime.Region(0))
+-
 -    encoding = get_encoding_from_region( region, view)
 +    encoding = get_encoding_from_region(region, view)
      if encoding:
@@ -130,6 +130,7 @@ class TestCaseBlack(TestCase):
     def setUp(self):
         self.window = sublime.active_window()
         self.view = self.window.new_file()
+        self.window.focus_view(self.view)
         # make sure we have a window to work with
         settings = sublime.load_settings("Preferences.sublime-settings")
         settings.set("close_windows_when_empty", False)
@@ -141,8 +142,7 @@ class TestCaseBlack(TestCase):
     def tearDown(self):
         if self.view:
             self.view.set_scratch(True)
-            self.view.window().focus_view(self.view)
-            self.view.window().run_command("close_file")
+            self.view.close()
 
         self.window.set_project_data(self.old_data)
 

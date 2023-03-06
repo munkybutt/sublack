@@ -335,17 +335,19 @@ def get_base_black_command(
     view: sublime.View,
     black_command: str = "",
     use_blackd: bool = False,
-    use_vendor: bool = False
+    use_vendor: bool = False,
 ) -> list[str]:
     log = get_log()
     full_black_command = None
     if black_command or black_command and not use_vendor:
         black_command = _resolve_command(black_command)
-        full_black_command = [f"{black_command}d" if use_blackd else black_command, "-"]
+        full_black_command = [f"{black_command}d" if use_blackd else black_command]
 
     else:
         black_command = get_vendor_blackd_path() if use_blackd else get_vendor_black_path()
-        full_black_command = [str(get_vendor_python_exe_path()), black_command, "-"]
+        full_black_command = [str(get_vendor_python_exe_path()), black_command]
+
+    full_black_command.append("-")
 
     try:
         subprocess.run(
@@ -382,14 +384,19 @@ def get_base_black_command(
         return get_base_black_command(view=view, use_vendor=True)
 
 
-def get_full_black_command(view: sublime.View, extra: list[str] | None = None):
+def get_full_black_command(
+    view: sublime.View,
+    black_command: str = "",
+    use_blackd: bool = False,
+    extra: list[str] | None = None
+):
     log = get_log()
     settings = get_settings(view=view)
     base_black_command = copy.copy(
         get_base_black_command(
             view,
-            black_command=settings.get("black_command"),
-            use_blackd=settings.get("black_use_blackd", False)
+            black_command=black_command or settings.get("black_command"),
+            use_blackd=use_blackd
         )
     )
 

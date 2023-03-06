@@ -61,6 +61,7 @@ class Blackd:
         """Get command line args and turn it to properly formatted headers"""
         headers: dict[str, Any] = {}
         command_set = set(command)
+        self.log.debug(f"command_set: {command_set}")
         # all but line length an dtarget version
         for item in command:
             if item not in consts.HEADERS_TABLE:
@@ -159,7 +160,7 @@ class Black:
         window = view.window() or active_window
 
         self.view = view
-        self.settings = utils.get_settings(view)
+        self.settings = utils.get_settings(view=view)
         self.all = sublime.Region(0, self.view.size())
         self.variables = window.extract_variables()
         self.formatted_cache = utils.cache_path() / "formatted"
@@ -236,16 +237,16 @@ class Black:
 
     def run_black(self, command: list[str], env: dict[str, Any], cwd: str | None, content: bytes):
         try:
-            process = subprocess.Popen(
+            process = subprocess.run(
                 command,
                 env=env,
                 cwd=cwd,
-                stdin=subprocess.PIPE,
+                input=content,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 startupinfo=utils.get_startup_info(),
             )
-            out, err = process.communicate(input=content)
+            out, err = process.stdout, process.stderr
 
         except UnboundLocalError as err:
             msg = "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
@@ -267,14 +268,14 @@ class Black:
         self.log.debug("run_black: returncode %s, err: %s", process.returncode, err)
         return process.returncode, out, err
 
-    def do_diff(self, edit: sublime.Edit, out: bytes, encoding: str):
+    def create_diff_view(self, edit: sublime.Edit, content: bytes, encoding: str):
         window = sublime.active_window()
         view = window.new_file()
         window.focus_view(view)
         view.set_scratch(True)
-        view.set_name("sublack diff %s" % self.view.name())
+        view.set_name(f"sublack diff {self.view.name()}")
         view.set_syntax_file("Packages/Diff/Diff.sublime-syntax")
-        view.insert(edit, 0, out.decode(encoding))
+        view.insert(edit, 0, content.decode(encoding))
 
     def get_good_working_dir(self):
         filename = self.view.file_name()
@@ -321,7 +322,7 @@ class Black:
     def finalize(self, edit: sublime.Edit, extra, returncode, out, err, content, command, encoding):
         error_message = err.decode(encoding).replace("\r\n", "\n").replace("\r", "\n")
 
-        self.log.debug("Black returned: {}".format(error_message))
+        self.log.debug(f"Black returned: {error_message}")
         # failure
         if returncode != 0:
             self.view.set_status(consts.STATUS_KEY, error_message)
@@ -334,7 +335,7 @@ class Black:
 
         # diff mode
         elif "--diff" in extra:
-            self.do_diff(edit, out, encoding)
+            self.create_diff_view(edit, out, encoding)
 
         # standard mode
         else:
@@ -407,7 +408,8 @@ class Black:
             self.format_via_precommit(edit, content.decode(encoding), cwd, env)
             return
 
-        command = utils.get_full_black_command(view=self.view, extra=extra)
+        use_blackd = self.settings["black_use_blackd"] and "--diff" not in extra
+        command = utils.get_full_black_command(view=self.view, use_blackd=use_blackd, extra=extra)
 
         # check the cache
         # cache may not be used with pre-commit
@@ -415,10 +417,10 @@ class Black:
             self.view.set_status(consts.STATUS_KEY, consts.ALREADY_FORMATTED_MESSAGE_CACHE)
             return
 
-        # call black or balckd:
-        if self.settings["black_use_blackd"]:  # no diff with server
+        if use_blackd:
             if not utils.has_blackd_started():
                 self.log.debug("Black server has not finished initializing!")
+                sublime.error_message("Black server has not finished initializing!")
                 return
 
             self.log.debug("using blackd")
