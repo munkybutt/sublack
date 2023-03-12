@@ -7,6 +7,7 @@ from unittesting import DeferrableTestCase
 
 
 sublack_module = sys.modules["sublack.sublack"]
+sublack_consts_module = sys.modules["sublack.sublack.consts"]
 sublack_server_module = sys.modules["sublack.sublack.server"]
 sublack_utils_module = sys.modules["sublack.sublack.utils"]
 
@@ -43,10 +44,10 @@ def get_encoding_from_file( view):
 
 diff = r"""@@ -1,12 +1,11 @@
 +def get_encoding_from_file(view):
- 
+ # type: ignore - these lines must include a single space
 -def get_encoding_from_file( view):
 +    region = view.line(sublime.Region(0))
- 
+ # type: ignore - these lines must include a single space
 -    region = view.line( sublime.Region(0))
 -
 -    encoding = get_encoding_from_region( region, view)
@@ -169,8 +170,10 @@ class TestCaseBlackAsync(DeferrableTestCase):
     def tearDown(self):
         if self.view:
             self.view.set_scratch(True)
-            self.view.window().focus_view(self.view)
-            self.view.window().run_command("close_file")
+            window = self.view.window()
+            assert window, "No window found!"
+            window.focus_view(self.view)
+            window.run_command("close_file")
 
         self.window.set_project_data(self.old_data)
 

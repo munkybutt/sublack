@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sublime
 import sublime_plugin
-import subprocess
 
 from . import blacker
 from . import consts
@@ -72,7 +71,7 @@ class BlackToggleBlackOnSaveCommand(sublime_plugin.TextCommand):
         else:
             return "Sublack: Enable black on save"
 
-    def run(self, edit):
+    def run(self, _):
         view: sublime.View = self.view
 
         settings = utils.get_settings(view)
@@ -104,6 +103,7 @@ class BlackdStartCommand(sublime_plugin.TextCommand):
 
     def run(self, _, **kwargs: Any):
         port = kwargs["port"] if kwargs and "port" in kwargs else None
+
         def _blackd_start():
             server.start_blackd_server(self.view, port=port)
 
@@ -118,10 +118,12 @@ class BlackdStopCommand(sublime_plugin.ApplicationCommand):
 
     def run(self):
         utils.get_log().debug("blackd_stop command running")
+        view = sublime.active_window().active_view()
+        assert view, "No view found!"
         if server.stop_blackd_server():
-            sublime.active_window().active_view().set_status(consts.STATUS_KEY, consts.BLACKD_STOPPED)
+            view.set_status(consts.STATUS_KEY, consts.BLACKD_STOPPED)
         else:
-            sublime.active_window().active_view().set_status(consts.STATUS_KEY, consts.BLACKD_STOP_FAILED)
+            view.set_status(consts.STATUS_KEY, consts.BLACKD_STOP_FAILED)
 
 
 class BlackFormatAllCommand(sublime_plugin.WindowCommand):
@@ -131,40 +133,5 @@ class BlackFormatAllCommand(sublime_plugin.WindowCommand):
     is_visible = is_enabled
 
     def run(self):
-        LOG = utils.get_log()
-        if utils.get_settings(self.window.active_view())["black_confirm_formatall"]:
-            if not sublime.ok_cancel_dialog(
-                (
-                    "Sublack: Format all?\nInfo: It runs black without sublack "
-                    "(ignoring sublack Options and Configuration)."
-                )
-            ):
-                return
-
-        folders = self.window.folders()
-
-        success = []
-        errors = []
-        dispatcher = None
-        for folder in folders:
-            p = utils.popen(
-                ["black", "."], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=folder
-            )
-            p.wait(timeout=10)
-            dispatcher = success if p.returncode == 0 else errors
-            dispatcher.append((folder, p.returncode, p.stderr.read()))
-
-        if not errors:  # all 0 return_code
-            self.window.active_view().set_status(consts.STATUS_KEY, consts.REFORMATTED_MESSAGE)
-        else:
-            self.window.active_view().set_status(consts.STATUS_KEY, consts.REFORMAT_ERRORS)
-
-        for out in success:
-            LOG.debug(
-                "black formatted folder %s with returncode %s and following en stderr :%s", *out
-            )
-
-        for out in errors:
-            LOG.error(
-                "black formatted folder %s with returncode %s and following en stderr :%s", *out
-            )
+        black_all = blacker.BlackAll(self.window)
+        black_all.run()

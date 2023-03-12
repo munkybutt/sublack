@@ -64,8 +64,9 @@ def get_log(settings: dict[str, Any] | None = None) -> logging.Logger:
             settings["black_log"] = "info"
 
         try:
-            _log.setLevel(settings.get("black_log").upper())
-        except ValueError as err:  # https://forum.sublimetext.com/t/an-odd-problem-about-sublime-load-settings/30335/6
+            _log.setLevel(settings.get("black_log", "info").upper())
+        except ValueError as err:
+            # https://forum.sublimetext.com/t/an-odd-problem-about-sublime-load-settings/30335/6
             _log.error(err)
             _log.setLevel("ERROR")
             _log.error("fallback to loglevel ERROR")
@@ -151,7 +152,9 @@ def get_on_save_fast(view: sublime.View):
     if flat_settings.has("sublack.black_on_save"):
         return flat_settings.get("sublack.black_on_save")
 
-    if "black_on_save" in flat_settings.get(consts.PACKAGE_NAME, {}):
+    settings = flat_settings.get(consts.PACKAGE_NAME, {})
+    assert isinstance(settings, dict)
+    if "black_on_save" in settings:
         return flat_settings.has("sublack.black_on_save")
 
     return sublime.load_settings(consts.SETTINGS_FILE_NAME).get("black_on_save")
@@ -162,6 +165,7 @@ def get_settings(view: sublime.View | None = None) -> dict[str, Any]:
     assert view, "No view found!"
     flat_settings = view.settings()
     nested_settings = flat_settings.get(consts.PACKAGE_NAME, {})
+    assert isinstance(nested_settings, dict)
     global_settings = sublime.load_settings(consts.SETTINGS_FILE_NAME)
     pyproject_settings = read_pyproject_toml(find_pyproject(view))
     settings = {}
@@ -334,6 +338,7 @@ def _resolve_command(command: str) -> str:
 def get_base_black_command(
     view: sublime.View,
     black_command: str = "",
+    file_path: pathlib.Path | None = None,
     use_blackd: bool = False,
     use_vendor: bool = False,
 ) -> list[str]:
@@ -347,7 +352,12 @@ def get_base_black_command(
         black_command = get_vendor_blackd_path() if use_blackd else get_vendor_black_path()
         full_black_command = [str(get_vendor_python_exe_path()), black_command]
 
-    full_black_command.append("-")
+    if file_path:
+        assert file_path.exists()
+        full_black_command.append(str(file_path))
+
+    else:
+        full_black_command.append("-")
 
     try:
         subprocess.run(
@@ -387,6 +397,7 @@ def get_base_black_command(
 def get_full_black_command(
     view: sublime.View,
     black_command: str = "",
+    file_path: pathlib.Path | None = None,
     use_blackd: bool = False,
     extra: list[str] | None = None
 ):
@@ -396,6 +407,7 @@ def get_full_black_command(
         get_base_black_command(
             view,
             black_command=black_command or settings.get("black_command"),
+            file_path=file_path,
             use_blackd=use_blackd
         )
     )
@@ -577,7 +589,7 @@ def read_pyproject_toml(pyproject: pathlib.Path | None) -> dict:
     return config
 
 
-def use_pre_commit(precommit: pathlib.Path) -> bool:
+def use_pre_commit(precommit: pathlib.Path | None) -> bool:
     """Returns True if black in .pre-commit-config.yaml"""
 
     from .vendor.packages import yaml

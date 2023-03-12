@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 import pathlib
-from sys import stdin
 import sublime
 import subprocess
 
@@ -180,50 +179,6 @@ class Black:
     def log(self):
         return utils.get_log()
 
-    def get_black_command(self, extra: list[str] | None = None) -> list[str]:
-        # prepare popen arguments
-        black_command = utils.get_full_black_command(view=self.view, extra=extra)
-        # black_command = utils.get_black_executable_command(black_command=self.config["black_command"])
-        if not black_command:
-            # always show error in popup
-            msg = "Black command not configured. Check your settings!"
-            sublime.error_message(msg)
-            raise Exception(msg)
-
-        # extra args
-        if extra:
-            black_command.extend(extra)
-
-        # Line length option
-        black_line_length = self.settings.get("black_line_length")
-        if self.settings.get("black_line_length"):
-            black_command.extend(("-l", str(black_line_length)))
-
-        # fast
-        if self.settings.get("black_fast", None):
-            black_command.append("--fast")
-
-        # black_skip_string_normalization
-        if self.settings.get("black_skip_string_normalization"):
-            black_command.append("--skip-string-normalization")
-
-        # handle pyi
-        filename = self.view.file_name()
-        if filename and filename.endswith(".pyi"):
-            black_command.append("--pyi")
-
-        # black_py36
-        if self.settings.get("black_py36"):
-            black_command.append("--py36")
-
-        # black target-version
-        if self.settings.get("black_target_version"):
-            for v in self.settings["black_target_version"]:
-                black_command.extend(("--target-version", v))
-
-        self.log.debug(f"black_command line: {black_command}")
-        return black_command
-
     def get_content(self):
         encoding = utils.get_encoding(settings=self.settings)
 
@@ -277,7 +232,7 @@ class Black:
         view.set_syntax_file("Packages/Diff/Diff.sublime-syntax")
         view.insert(edit, 0, content.decode(encoding))
 
-    def get_good_working_dir(self):
+    def get_working_directory(self):
         filename = self.view.file_name()
         if filename:
             return os.path.dirname(filename)
@@ -371,8 +326,10 @@ class Black:
         tmp.write_text(content)
 
         command.extend([str(tmp.resolve()), "--config", str(self.pre_commit_config)])
+        window = self.view.window()
+        assert window, "No window found!"
         self.log.debug("cwd : %s", cwd)
-        self.log.debug(self.view.window().folders())
+        self.log.debug(window.folders())
         self.log.debug(command)
         try:
             process = subprocess.Popen(
@@ -395,11 +352,13 @@ class Black:
         self.view.replace(edit, self.all, tmp.read_text())
         sublime.set_timeout_async(lambda: tmp.unlink())
 
-    def __call__(self, edit: sublime.Edit, extra: list[str] = []):
+    def __call__(
+        self, edit: sublime.Edit, file_path: pathlib.Path | None = None, extra: list[str] = []
+    ):
 
         # get command_line  + args
         content, encoding = self.get_content()
-        cwd = self.get_good_working_dir()
+        cwd = self.get_working_directory()
         self.log.debug(f"Working dir: {cwd}")
         env = utils.get_env()
 
@@ -408,8 +367,13 @@ class Black:
             self.format_via_precommit(edit, content.decode(encoding), cwd, env)
             return
 
-        use_blackd = self.settings["black_use_blackd"] and "--diff" not in extra
-        command = utils.get_full_black_command(view=self.view, use_blackd=use_blackd, extra=extra)
+        use_blackd = self.settings.get("black_use_blackd", True) and "--diff" not in extra
+        command = utils.get_full_black_command(
+            view=self.view,
+            file_path=file_path,
+            use_blackd=use_blackd,
+            extra=extra,
+        )
 
         # check the cache
         # cache may not be used with pre-commit
@@ -432,3 +396,128 @@ class Black:
 
         # format/diff in editor
         self.finalize(edit, extra, returncode, out, err, content, command, encoding)
+
+
+class BlackAll:
+    def __init__(self, window: sublime.Window):
+        super().__init__()
+
+        view = window.active_view()
+        assert view, "view not defined, cannot init BlackAll!"
+
+        view = window.active_view()
+        assert view, "view not defined, cannot init BlackAll!"
+
+        self.view = view
+        self.settings = utils.get_settings(view=view)
+        self.variables = window.extract_variables()
+        self.folders = window.folders()
+        # self.folders = ["D:\\Code\\Git\\sublack\\tests\\format_all"]
+
+    @property
+    def log(self):
+        return utils.get_log()
+
+    def get_working_directory(self):
+        filename = self.view.file_name()
+        if filename:
+            return os.path.dirname(filename)
+
+        window = self.view.window()
+        if not window:
+            return
+
+        folders = window.folders()
+        if not folders:
+            return
+
+        return folders[0]
+
+    def run_black_command(self, command: list[str]):
+        try:
+            process = subprocess.run(
+                command,
+                env=utils.get_env(),
+                cwd=self.get_working_directory(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                startupinfo=utils.get_startup_info(),
+                timeout=10,
+            )
+            stdout, stderr = process.stdout, process.stderr
+
+        except UnboundLocalError as error:
+            msg = "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
+            sublime.error_message("OSError: %s\n\n%s" % (error, msg))
+            raise OSError(
+                "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
+            )
+
+        except OSError as error:
+            import traceback
+
+            exception = traceback.format_exc()
+            msg = "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
+            sublime.error_message("OSError: %s\n\n%s" % (exception, msg))
+            raise OSError(
+                "You may need to install Black and/or configure 'black_command' in Sublack's Settings."
+            )
+
+        self.log.debug(f"run_black_command: return code: {process.returncode}, message: {stderr}")
+        return process.returncode, stdout, stderr
+
+    def run_black_on_folder(self, folder, extra: list[str] = []):
+        command = utils.get_full_black_command(
+            view=self.view,
+            file_path=folder,
+            use_blackd=False,
+            extra=extra,
+        )
+        return self.run_black_command(command)
+
+    def run(self, extra: list[str] = []):
+        folders = self.folders
+        if self.settings["black_confirm_formatall"]:
+            folders_str = "\n- ".join(folders)
+            message = (
+                f"Sublack: Format all files in the following folders:\n\n- {folders_str}"
+                "\n\nWarning: This cannot be undone!"
+            )
+            if not sublime.ok_cancel_dialog(message):
+                return
+
+        error_list: list[tuple[str, int, str]] = []
+        success_list: list[tuple[str, int, str]] = []
+        for folder in folders:
+            return_code, _, error = self.run_black_on_folder(folder, extra=extra)
+            result_list = success_list if return_code == 0 else error_list
+            result_list.append((folder, return_code, error.decode()))
+
+        error_message = (
+            consts.REFORMATTED_ALL_PARTIAL_MESSAGE
+            if success_list and error_list
+            else consts.REFORMATTED_ALL_MESSAGE
+            if success_list
+            else consts.REFORMAT_ERRORS
+        )
+        # if success_list and error_list:
+        #     error_message = consts.REFORMATTED_ALL_PARTIAL_MESSAGE
+
+        # elif success_list:
+        #     error_message = consts.REFORMATTED_ALL_MESSAGE
+
+        # else:
+        #     error_message = consts.REFORMAT_ERRORS
+
+        self.view.set_status(consts.STATUS_KEY, error_message)
+        for result in success_list:
+            folder, code, output = result
+            self.log.debug(
+                f"Black successfully formatted folder: {folder} - return code: {code} output: {output}"
+            )
+
+        for result in error_list:
+            folder, code, output = result
+            self.log.error(
+                f"Black failed to format folder: {folder} - return code: {code} output: {output}"
+            )

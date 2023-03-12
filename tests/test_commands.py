@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from unittest import TestCase
-from unittest.mock import patch
-
 import fixtures
 import pathlib
 import sublime
 import time
+
+from unittest import TestCase
+from unittest.mock import patch
 
 
 @patch.object(fixtures.sublack_utils_module, "is_python", return_value=True)
@@ -70,7 +70,7 @@ class TestBlack(fixtures.TestCaseBlack):
 
         self.assertEqual(region_content.strip(), fixtures.diff.strip())
         self.assertEqual(
-            diff_view.settings().get("syntax"), "Packages/fixtures.Diff/fixtures.Diff.sublime-syntax"
+            diff_view.settings().get("syntax"), "Packages/Diff/Diff.sublime-syntax"
         )
         diff_view.set_scratch(True)
         diff_view.close()
@@ -79,7 +79,7 @@ class TestBlack(fixtures.TestCaseBlack):
         self.setText(fixtures.folding1)
         self.view.fold(sublime.Region(25, 62))
         self.view.run_command("black_file")
-        self.assertEqual(folding1_expected, self.all())
+        self.assertEqual(fixtures.folding1_expected, self.all())
         self.assertEquals(
             self.view.unfold(sublime.Region(0, self.view.size())),
             [sublime.Region(25, 59)],
@@ -126,6 +126,7 @@ class TestBlackdServer(TestCase):
         # back to it when I am less sleep deprived...
         if not post:
             port = port or fixtures.sublack_utils_module.get_open_port()
+
             def _start_blackd():
                 self.view.run_command("blackd_start", {"port": port})
                 self.test_start_and_stop_blackd(post=True, port=port)
@@ -201,42 +202,78 @@ class TestBlackdServer(TestCase):
 
 
 class TestFormatAll(fixtures.TestCaseBlack):
+
+    temp_folder: pathlib.Path | None = None
+    files: list[pathlib.Path] = []
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        if cls.temp_folder and cls.temp_folder.exists():
+            print(tuple(cls.temp_folder.iterdir()))
+            cls.temp_folder.rmdir()
+
     def setUp(self):
         super().setUp()
-        self.window.set_project_data({"folders": [{"pathlib.path": str(self.folder)}]})
+        self.temp_folder = self.folder / "tests/temp"
+        if not self.temp_folder.exists():
+            self.temp_folder.mkdir(parents=True)
+
+        self.project_data = self.window.project_data()
+        self.window.set_project_data(
+            {"folders": [{"path": str(self.temp_folder)}]}
+        )
 
     def tearDown(self):
         super().tearDown()
-        if hasattr(self, "wrong"):
-            self.wrong.unlink()
+        for file in self.files:
+            if not file.exists():
+                continue
+
+            file.unlink()
+
+        self.files.clear()
+        self.window.set_project_data(self.project_data)
 
     def test_black_all_success(self):
+        view = self.window.active_view()
+        assert view, "No active view found!"
+        temp_folder = self.temp_folder
+        assert temp_folder
+        file = temp_folder / "test_success_001.py"
+        self.files.append(file)
+        with file.open("w") as _file:
+            _file.write("a=1")
 
-        # make sure we have a window to work with
-        # s = sublime.load_settings("Preferences.sublime-settings")
-        # s.set("close_windows_when_empty", False)
-        # self.maxDiff = None
+        file = temp_folder / "test_success_002.py"
+        self.files.append(file)
+        with file.open("w") as _file:
+            _file.write("b=2")
 
         with patch("sublime.ok_cancel_dialog", return_value=True):
             self.window.run_command("black_format_all")
+
         self.assertEqual(
-            self.window.active_view().get_status(fixtures.sublack_module.STATUS_KEY),
-            fixtures.sublack_module.REFORMATTED_MESSAGE,
-            "reformat should be ok",
+            view.get_status(fixtures.sublack_module.STATUS_KEY),
+            fixtures.sublack_module.REFORMATTED_ALL_MESSAGE
         )
 
     def test_black_all_fail(self):
-
-        self.wrong = self.folder / "wrong.py"
-        with open(str(self.wrong), "w") as ww:
-            ww.write("ab ac = 2")
+        temp_folder = self.temp_folder
+        assert temp_folder
+        file = temp_folder / "test_fail_001.py"
+        self.files.append(file)
+        with file.open("w") as _file:
+            _file.write("ab ac = 2")
 
         with patch("sublime.ok_cancel_dialog", return_value=True):
             self.window.run_command("black_format_all")
+
+        view = self.window.active_view()
+        assert view, "No active view found!"
         self.assertEqual(
-            self.window.active_view().get_status(fixtures.sublack_module.STATUS_KEY),
-            fixtures.sublack_module.REFORMAT_ERRORS,
-            "reformat should be error",
+            view.get_status(fixtures.sublack_module.STATUS_KEY),
+            fixtures.sublack_module.REFORMAT_ERRORS
         )
 
 
@@ -246,6 +283,8 @@ PRECOMMIT_BLACK_SETTINGS = {
     "black_fast": False,
     "black_debug_on": True,
     "black_use_precommit": True,
+    "black_use_blackd": False,
+    "black_default_encoding": "utf-8",
 }
 
 precommit_config_path = pathlib.Path(__file__).parent / ".pre-commit-config.yaml"
@@ -255,7 +294,7 @@ precommit_config_path = pathlib.Path(__file__).parent / ".pre-commit-config.yaml
 @patch.object(fixtures.sublack_utils_module, "is_python", return_value=True)
 @patch.object(fixtures.sublack_utils_module, "get_settings", return_value=PRECOMMIT_BLACK_SETTINGS)
 class TestPrecommit(fixtures.TestCaseBlack):
-    def test_black_file(self, s, c, p):
+    def test_black_file(self, *_):
         project = {"folders": [{"path": str(pathlib.Path(pathlib.Path(__file__).parents[1]))}]}
         self.window.set_project_data(project)
         # with tempfile.TemporaryDirectory() as T:

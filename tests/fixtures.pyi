@@ -1,4 +1,6 @@
+import pathlib
 import sublack as _sb
+import sublack.consts as _sbc
 import sublack.server as _sbs
 import sublack.utils as _sbu
 import sublime
@@ -7,6 +9,7 @@ from unittest import TestCase
 from unittesting import DeferrableTestCase
 
 sublack_module = _sb
+sublack_consts_module = _sbc
 sublack_server_module = _sbs
 sublack_utils_module = _sbu
 
@@ -14,6 +17,7 @@ sublack_utils_module = _sbu
 class TestCaseBlack(TestCase):
     window: sublime.Window = ...
     view: sublime.View = ...
+    folder: pathlib.Path = ...
     def setUp(self): ...
     def tearDown(self): ...
     def all(self): ...
