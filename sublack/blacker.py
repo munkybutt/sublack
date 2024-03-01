@@ -280,12 +280,12 @@ class Black:
         self.log.debug(f"Black returned: {error_message}")
         # failure
         if returncode != 0:
-            self.view.set_status(consts.STATUS_KEY, error_message)
+            self.view.window().status_message(error_message)
             return returncode
 
-        # already formated, nothing changes
+        # already formatted, nothing changes
         elif "unchanged" in error_message:
-            self.view.set_status(consts.STATUS_KEY, consts.ALREADY_FORMATTED_MESSAGE)
+            self.view.window().status_message(consts.ALREADY_FORMATTED_MESSAGE)
             self.add_to_cache(content, command)
 
         # diff mode
@@ -311,7 +311,7 @@ class Black:
             self.view.sel().add(old_sel)
 
             # status and caching
-            self.view.set_status(consts.STATUS_KEY, consts.REFORMATTED_MESSAGE)
+            self.view.window().status_message(consts.REFORMATTED_MESSAGE)
             sublime.set_timeout_async(lambda: self.add_to_cache(new_content, command))
 
     def format_via_precommit(self, edit: sublime.Edit, content, cwd, env):
@@ -378,7 +378,7 @@ class Black:
         # check the cache
         # cache may not be used with pre-commit
         if self.is_cached(content, command):
-            self.view.set_status(consts.STATUS_KEY, consts.ALREADY_FORMATTED_MESSAGE_CACHE)
+            self.view.window().status_message(consts.ALREADY_FORMATTED_MESSAGE_CACHE)
             return
 
         if use_blackd:
@@ -500,16 +500,9 @@ class BlackAll:
             if success_list
             else consts.REFORMAT_ERRORS
         )
-        # if success_list and error_list:
-        #     error_message = consts.REFORMATTED_ALL_PARTIAL_MESSAGE
+        if window := self.view.window():
+            window.status_message(error_message)
 
-        # elif success_list:
-        #     error_message = consts.REFORMATTED_ALL_MESSAGE
-
-        # else:
-        #     error_message = consts.REFORMAT_ERRORS
-
-        self.view.set_status(consts.STATUS_KEY, error_message)
         for result in success_list:
             folder, code, output = result
             self.log.debug(
