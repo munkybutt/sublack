@@ -121,9 +121,9 @@ class BlackdStopCommand(sublime_plugin.ApplicationCommand):
         view = sublime.active_window().active_view()
         assert view, "No view found!"
         if server.stop_blackd_server():
-            view.set_status(consts.STATUS_KEY, consts.BLACKD_STOPPED)
+            sublime.active_window().status_message(consts.BLACKD_STOPPED)
         else:
-            view.set_status(consts.STATUS_KEY, consts.BLACKD_STOP_FAILED)
+            sublime.active_window().status_message(consts.BLACKD_STOP_FAILED)
 
 
 class BlackFormatAllCommand(sublime_plugin.WindowCommand):
