@@ -223,14 +223,14 @@ class Black:
         self.log.debug("run_black: returncode %s, err: %s", process.returncode, err)
         return process.returncode, out, err
 
-    def create_diff_view(self, edit: sublime.Edit, content: bytes, encoding: str):
+    def create_diff_view(self, content: bytes, encoding: str):
         window = sublime.active_window()
         view = window.new_file()
         window.focus_view(view)
         view.set_scratch(True)
         view.set_name(f"sublack diff {self.view.name()}")
         view.set_syntax_file("Packages/Diff/Diff.sublime-syntax")
-        view.insert(edit, 0, content.decode(encoding))
+        view.run_command('append', {'characters': content.decode(encoding)})
 
     def get_working_directory(self):
         filename = self.view.file_name()
@@ -290,7 +290,7 @@ class Black:
 
         # diff mode
         elif "--diff" in extra:
-            self.create_diff_view(edit, out, encoding)
+            self.create_diff_view(out, encoding)
 
         # standard mode
         else:
