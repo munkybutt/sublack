@@ -283,7 +283,7 @@ class Black:
             self.view.window().status_message(error_message)
             return returncode
 
-        # already formated, nothing changes
+        # already formatted, nothing changes
         elif "unchanged" in error_message:
             self.view.window().status_message(consts.ALREADY_FORMATTED_MESSAGE)
             self.add_to_cache(content, command)
